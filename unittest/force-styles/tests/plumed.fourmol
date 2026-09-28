@@ -1,0 +1,15 @@
+# Minimal, deterministic PLUMED input for the LAMMPS "fix plumed" unit test.
+# Kept cheap on purpose: no history-dependent bias (so a restarted run
+# reproduces the reference trajectory exactly) and no output files.
+#
+# PLUMED works in its own internal units (nm, kJ/mol, ps); fix plumed
+# installs the conversion from the "real" units of the in.fourmol system.
+
+d1: DISTANCE ATOMS=1,2
+d2: DISTANCE ATOMS=3,4
+a1: ANGLE    ATOMS=1,2,3
+cn: COORDINATION GROUPA=1-10 GROUPB=11-29 R_0=0.3
+
+# Restrain all four, so that every atom in the system receives a bias force
+# and the global bias energy and virial are both nonzero.
+RESTRAINT ARG=d1,d2,a1,cn KAPPA=500.0,500.0,100.0,10.0 AT=0.15,0.15,1.9,5.0

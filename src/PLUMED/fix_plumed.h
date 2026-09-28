@@ -45,7 +45,15 @@ class FixPlumed : public Fix {
   int modify_param(int narg, char **arg) override;
   double memory_usage() override;
 
- private:
+ protected:
+  // Seams between driving PLUMED and moving the data, so that an accelerator
+  // sub-class can change which atoms PLUMED is given and where its forces land
+  // without duplicating post_force().  Members below are protected for the
+  // same reason.
+  virtual void set_plumed_atoms();
+  virtual void unpack_plumed_forces() {}
+  void update_local_atoms();
+
   PLMD::Plumed *p;           // pointer to plumed object
   int nlocal;                // number of atoms local to this process
   int natoms;                // total number of atoms
