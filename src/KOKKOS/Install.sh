@@ -270,6 +270,8 @@ action fix_oneway_kokkos.cpp fix_oneway.cpp
 action fix_oneway_kokkos.h fix_oneway.h
 action fix_planeforce_kokkos.cpp
 action fix_planeforce_kokkos.h
+action fix_plumed_kokkos.cpp fix_plumed.cpp
+action fix_plumed_kokkos.h fix_plumed.h
 action fix_press_berendsen_kokkos.cpp
 action fix_press_berendsen_kokkos.h
 action fix_press_langevin_kokkos.cpp

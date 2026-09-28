@@ -1,0 +1,16 @@
+---
+lammps_version: 
+date_generated: 
+epsilon: 5e-13
+skip_tests: 
+prerequisites: ! |
+  atom full
+  fix plumed
+pre_commands: ! ""
+post_commands: ! |
+  fix move all nve
+  fix test all plumed plumedfile ${input_dir}/plumed.fourmol outfile plumed-test.out
+input_file: in.fourmol
+input_coeffs: coeffs.fourmol
+natoms: 29
+...

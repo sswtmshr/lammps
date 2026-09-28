@@ -253,6 +253,7 @@ FixPlumed::FixPlumed(LAMMPS *lmp, int narg, char **arg) :
 
 FixPlumed::~FixPlumed()
 {
+  if (copymode) return;
   delete p;
   modify->delete_compute(id_pe);
   modify->delete_compute(id_press);
@@ -327,13 +328,14 @@ void FixPlumed::min_setup(int vflag)
   post_force(vflag);
 }
 
-void FixPlumed::post_force(int /* vflag */)
+/* ----------------------------------------------------------------------
+   rebuild the local atom bookkeeping when the domain decomposition has
+   changed, and tell PLUMED which atoms this rank owns
+------------------------------------------------------------------------- */
+
+void FixPlumed::update_local_atoms()
 {
-
   int update_gatindex = 0;
-
-  if (natoms != int(atom->natoms))
-    error->all(FLERR, "Fix plumed does not support simulations with varying numbers of atoms");
 
   // Try to find out if the domain decomposition has been updated:
 
@@ -380,6 +382,29 @@ void FixPlumed::post_force(int /* vflag */)
     p->cmd("setAtomsNlocal", &nlocal);
     p->cmd("setAtomsGatindex", gatindex);
   }
+}
+
+/* ----------------------------------------------------------------------
+   hand PLUMED the arrays it reads from and writes into.  An accelerator
+   sub-class overrides this to pass compacted buffers instead, which is why
+   it is called between prepareDependencies() and shareData(): by then
+   PLUMED knows which of its actions are active this step, and therefore
+   which atoms it actually needs.
+------------------------------------------------------------------------- */
+
+void FixPlumed::set_plumed_atoms()
+{
+  update_local_atoms();
+  p->cmd("setPositions", &atom->x[0][0]);
+  p->cmd("setForces", &atom->f[0][0]);
+  p->cmd("setMasses", &masses[0]);
+  p->cmd("setCharges", &charges[0]);
+}
+
+void FixPlumed::post_force(int /* vflag */)
+{
+  if (natoms != int(atom->natoms))
+    error->all(FLERR, "Fix plumed does not support simulations with varying numbers of atoms");
 
   // set up local virial/box. plumed uses full 3x3 matrices
   double plmd_virial[3][3];
@@ -416,11 +441,7 @@ void FixPlumed::post_force(int /* vflag */)
   // pass all pointers to plumed:
   plumedStopCondition = 0;
   p->cmd("setStopFlag", &plumedStopCondition);
-  p->cmd("setPositions", &atom->x[0][0]);
   p->cmd("setBox", &box[0][0]);
-  p->cmd("setForces", &atom->f[0][0]);
-  p->cmd("setMasses", &masses[0]);
-  p->cmd("setCharges", &charges[0]);
   p->cmd("getBias", &bias);
 
   // Pass virial to plumed
@@ -429,10 +450,17 @@ void FixPlumed::post_force(int /* vflag */)
   // In the first case the virial will be rescaled and an extra term will be added
   // In the latter case only an extra term will be added
   p->cmd("setVirial", &plmd_virial[0][0]);
-  p->cmd("shareData"); // prepareCalc = prepareDependencies(done above) + shareData
+  
+  // isEnergyNeeded() is answered by prepareDependencies(), so ask before handing
+  // over the atoms: a sub-class needs to know, while choosing what array to give
+  // PLUMED for the forces, whether PLUMED may rescale that array rather than
+  // only add to it (which is what it does when an ENERGY action is biased).
 
   plumedNeedsEnergy = 0;
   p->cmd("isEnergyNeeded", &plumedNeedsEnergy);
+
+  set_plumed_atoms();
+  p->cmd("shareData");
 
   // Pass potential energy and virial if needed
   double *virial_lmp;
@@ -486,6 +514,10 @@ void FixPlumed::post_force(int /* vflag */)
   }
   // do the real calculation:
   p->cmd("performCalc");
+
+  // PLUMED has added its forces into whatever array set_plumed_atoms() gave it;
+  // a sub-class that supplied its own buffer brings them back here.
+  unpack_plumed_forces();
 
   if (plumedStopCondition) timer->force_timeout();
 
